@@ -13,7 +13,8 @@ with RegexBuild('.*') as build:
     with build(r'\.') as extensions:
         extensions('(?i)', exit='$')(
             'temp', 'tmp', 'cache', 'dmp', 'dump', 'err', 'crash', 'part',
-            RegexBuild('log')('', r'\..*'), RegexBuild('lock')('', 'file'),
+            RegexBuild('log')('', r'\..*'),
+            RegexBuild('lock')('', 'file'),
         )
         extensions('reapeaks', 'pyc', 'updaterId', 'cprestoretmp')
 
@@ -27,28 +28,34 @@ with RegexBuild('.*') as build:
 
         # Block misc files
         paths('(?i)', exit='$')(
-            'lock', 'temp', 'error', 'dump', 'dmp', 'cache', 'autoexec.bat',
-            RegexBuild('log')('', r'\..*'), RegexBuild('lock')('', 'file'),
+            'lock', 'temp', 'error', 'dump', 'dmp', 'autoexec.bat',
+            RegexBuild('log')('', r'\..*'),
+            RegexBuild('lock')('', 'file'),
+            RegexBuild('cache')('', r'\.json'),
         )
 
         # Block specific folders
         paths(
             'Microsoft', 'NetHood', 'PrintHood', 'Recent', 'SendTo', 'LocalService', 'NetworkService', '__pycache__',
             'System Volume Information', 'RECYCLER', r'\$RECYCLE\.BIN', 'I386', 'MSOCache', 'Temporary Internet Files',
-            r'Google\\Chrome\\Safe Browsing', 'site-packages', r'\.duplicacy', r'\.git', 'System Volume Information',
+            r'Google\\Chrome\\Safe Browsing', r'\.duplicacy', r'\.git', 'System Volume Information',
             'WUDownloadCache', 'OneDriveTemp', 'Config.MSI', 'Perflogs', RegexBuild('Windows')('', r'\.old'),
+            'site-packages',  # Python
+            '_gsdata_',  # GoodSync
+            '.tmp.drivedownload',  # Google Backup & Sync
         )(r'\\')
 
         # Block misc folders
         with paths('(?i)', exit=r'\\$') as directories:
             directories(
-                'temp', 'tmp', 'temporary', 'dmp', 'telemetry', 'local storage', '.backup', 'safebrowsing', 'installer',
+                'tmp', 'dmp', 'telemetry', 'local storage', '.backup', 'safebrowsing', 'installer',
+                RegexBuild('temp')('', 'orary', 'data'),
                 RegexBuild('', 'elevated')('diagnostics'), RegexBuild('hardware')('', ' ')('survey'),
                 RegexBuild('crash')('', 'es', RegexBuild('', ' ', r'\-')('report', 'log', 'dump')('', 's')),
                 RegexBuild(
                     RegexBuild('web')('', 'app'), 'shader', 'gpu', 'd2ds','code', 'cef', 'package',
                     'html', 'installer', 'data', 'file',
-                )('', ' ', r'\-')('cache')('', r'\-temp'),
+                )('', ' ', r'\-')('cache'),  # Lots of cache folder types
                 RegexBuild('cache')('', 's', 'storage', RegexBuild('d')('', 'data', 'extensions', 'thumbnails')),
                 RegexBuild('dump', 'minidump', 'error')('', 's'),
                 RegexBuild('log')('', 's', 'files', 'backups'),
@@ -56,13 +63,28 @@ with RegexBuild('.*') as build:
 
         # Documents
         with paths(r'Documents\\') as documents:
-            documents('3DMark*', r'3DS Max .*\\SimCache\\', r'Larian Studios\\.*\\LevelCache\\')(r'\\')
+            # Adobe folder
+            with documents(r'Adobe\\') as adobe:
+                with adobe(r'Adobe Media Encoder\\[0-9]*\.[0-9]*\\') as media_encoder:
+                    media_encoder('Media Browser Provider Exception', RegexBuild('AMEEncoding')('', 'Error')(r'Log\.txt')) # D:\Peter\Documents\Adobe\Adobe Media Encoder\11.0\AMEEncodingErrorLog.txt
+                adobe(r'After Effects [A-Z0-9 ]*\\AE Project Logs\\') # D:\Peter\Documents\Adobe\After Effects CS6\AE Project Logs
+            # General folders
+            documents(
+                r'3DS Max [0-9]{4}\\SimCache',
+                RegexBuild('3DMark')('', 'Farandole')(r'\\Shaders'),
+                RegexBuild(r'Larian Studios\\Divinity Original Sin')('', ' Enhanced Edition')(r'\\LevelCache'),
+            )(r'\\')
 
         # AppData
         with paths(r'AppData\\') as appdata:
             # Local
             with appdata(r'Local\\') as local:
-                local('IconCache.db')
+                # General files
+                local(
+                    'IconCache.db',
+                    r'Saber\\WWZ\\client\\render\\pso_cache'  # World War Z cache
+                )
+                # General folders
                 local(
                     '\@nzxtcam-app-updater', 'Amazon Drive', 'ConnnectedDevicesPlatform', 'Downloaded Installations',
                     'Duplicati', 'GoToMeeting', 'Microsoft', r'MicrosoftEdge\\SharedCacheContainers', 'OneDrive',
@@ -70,11 +92,26 @@ with RegexBuild('.*') as build:
                     RegexBuild('Package')('s', ' Cache'), RegexBuild('NVIDIA')('', ' Corporation'),
                     RegexBuild(r'acquisition\\')('sensitive_data', 'tabcache'), 'EpicGamesLauncher',
                     RegexBuild(r'UnrealEngine\\.*\\')('DerivedDataCache', 'Intermediate'),
+                    RegexBuild(r'Google(?!\\Chrome)'),  # Exclude all Google directories aside from Chrome
                 )(r'\\')
 
             # Roaming
             with appdata(r'Roaming\\') as roaming:
+                # Adobe stuff
+                with roaming(r'Adobe\\') as adobe:
+                    # C:\Users\Peter\AppData\Roaming\Adobe\Adobe Photoshop 2020\Adobe Photoshop 2020 Settings\web-cache-temp
+                    adobe(
+                        'CRLogs', 'GUDE', 'Flash Player',
+                        RegexBuild(r'Adobe Photoshop [0-9]{4}\\')(
+                            RegexBuild('CT Font ', 'FontFeature')('Cache'),
+                            RegexBuild(r'Adobe Photoshop [0-9]{4} Settings\\web-cache-temp'),
+                        )
+                    )(r'\\')
+                    adobe(r'Color\\ACEConfigCache2.lst')
+
+                # General files
                 roaming(r'NvTelemetryContainer\.log.*', r'ntuser\.dat', 'mntemp')
+                # General folders
                 roaming(
                     'NVIDIA', 'Amazon Cloud Drive', 'Code', 'CrashPlan', 'Jedi', r'Tencent\\TXSSO\\SSOTemp',
                     'uTorrent', 'vstelemetry', 'Github Desktop', 'FAHClient', 'Discord', 'Visual Studio Setup',
@@ -89,8 +126,6 @@ with RegexBuild('.*') as build:
             'Packages', 'Path of Building', 'Razer', r'Ubisoft\\Ubisoft Game Launcher', 'USO.*', 'Windows.*', '.mono',
             r'Adobe\\SLStore', 'AVAST Software', 'CloudBerryLab', 'EA .*', 'For Honor.*', 'Intel', 'Kaspersky Lab',
             'LiquidTechnologies', 'Oracle', 'Origin', r'regid\.[0-9]{4}\-[0-9]{2}.com.*', 'RuPlatform', 'Samsung',
-
-
         )(r'\\')
 
         # LocalLow
