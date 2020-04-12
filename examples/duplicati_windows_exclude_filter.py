@@ -10,8 +10,8 @@ from regex_build import RegexBuild
 
 with RegexBuild('.*') as build:
     # Exensions
-    with build(r'\.') as extensions:
-        extensions('(?i)', exit='$')(
+    with build(r'\.', exit='$') as extensions:
+        extensions('(?i)', exit='(?-i)')(
             'temp', 'tmp', 'cache', 'dmp', 'dump', 'err', 'crash', 'part',
             RegexBuild('log')('', r'\..*'),
             RegexBuild('lock')('', 'file'),
@@ -24,15 +24,18 @@ with RegexBuild('.*') as build:
             'Thumbs.db', 'UsrClass.dat', 'output_log.txt',
             RegexBuild('hyberfil', 'swapfile')('.sys'),
             RegexBuild(r'LocalShaderCache-.*\.upk'),
-        )
+        )('$')
 
-        # Block misc files
-        paths('(?i)', exit='$')(
-            'lock', 'temp', 'error', 'dump', 'dmp', 'autoexec.bat',
+        paths('(?i)')(
+            # Block specific files that may be any case
+            r'ntuser\.dat.*', 'autoexec.bat',
+
+            # Block misc files that may not have extensions
+            'temp', 'error', 'dump', 'dmp',
             RegexBuild('log')('', r'\..*'),
             RegexBuild('lock')('', 'file'),
             RegexBuild('cache')('', r'\.json'),
-        )
+        )('(?-i)$')
 
         # Block specific folders
         paths(
@@ -40,13 +43,14 @@ with RegexBuild('.*') as build:
             'System Volume Information', 'RECYCLER', r'\$RECYCLE\.BIN', 'I386', 'MSOCache', 'Temporary Internet Files',
             r'Google\\Chrome\\Safe Browsing', r'\.duplicacy', r'\.git', 'System Volume Information',
             'WUDownloadCache', 'OneDriveTemp', 'Config.MSI', 'Perflogs', RegexBuild('Windows')('', r'\.old'),
+            r'Epic Games\\Launcher\\VaultCache',
             'site-packages',  # Python
             '_gsdata_',  # GoodSync
             '.tmp.drivedownload',  # Google Backup & Sync
         )(r'\\')
 
         # Block misc folders
-        with paths('(?i)', exit=r'\\$') as directories:
+        with paths('(?i)', exit=r'(?-i)\\') as directories:
             directories(
                 'tmp', 'dmp', 'telemetry', 'local storage', '.backup', 'safebrowsing', 'installer',
                 RegexBuild('temp')('', 'orary', 'data'),
@@ -66,15 +70,23 @@ with RegexBuild('.*') as build:
             # Adobe folder
             with documents(r'Adobe\\') as adobe:
                 with adobe(r'Adobe Media Encoder\\[0-9]*\.[0-9]*\\') as media_encoder:
-                    media_encoder('Media Browser Provider Exception', RegexBuild('AMEEncoding')('', 'Error')(r'Log\.txt')) # D:\Peter\Documents\Adobe\Adobe Media Encoder\11.0\AMEEncodingErrorLog.txt
+                    media_encoder('Media Browser Provider Exception', RegexBuild('AMEEncoding')('', 'Error')(r'Log\.txt$')) # D:\Peter\Documents\Adobe\Adobe Media Encoder\11.0\AMEEncodingErrorLog.txt
                 adobe(r'After Effects [A-Z0-9 ]*\\AE Project Logs\\') # D:\Peter\Documents\Adobe\After Effects CS6\AE Project Logs
+
+            # Example Unreal Engine projects
+            documents(r'Unreal Projects\\')(
+                'ABoyandHisKite', 'AllegorithmicGynoid', 'Blueprints', 'ChaosDestructionDemo','ContentExamples',
+                'CouchKnights', 'ElementalDemo', 'EpicZenGarden', 'InfiltratorDemo', 'MultiplayerShootout',
+                'PixelStreamingDemo', 'PlatformerGame', 'PortalsBlueprint', 'RealisticRendering', 'Reflections',
+                'ShooterGame', 'ShowdownVRDemo', 'SubstanceAtlantis', 'SciFiBunk', 'SillyGeo', 'VehicleGame',
+            )(r'\\')
+
             # General folders
             documents(
                 r'3DS Max [0-9]{4}\\SimCache',
                 RegexBuild('3DMark')('', 'Farandole')(r'\\Shaders'),
                 RegexBuild(r'Larian Studios\\Divinity Original Sin')('', ' Enhanced Edition')(r'\\LevelCache'),
             )(r'\\')
-
         # AppData
         with paths(r'AppData\\') as appdata:
             # Local
@@ -83,7 +95,7 @@ with RegexBuild('.*') as build:
                 local(
                     'IconCache.db',
                     r'Saber\\WWZ\\client\\render\\pso_cache'  # World War Z cache
-                )
+                )('$')
                 # General folders
                 local(
                     '\@nzxtcam-app-updater', 'Amazon Drive', 'ConnnectedDevicesPlatform', 'Downloaded Installations',
@@ -110,7 +122,7 @@ with RegexBuild('.*') as build:
                     adobe(r'Color\\ACEConfigCache2.lst')
 
                 # General files
-                roaming(r'NvTelemetryContainer\.log.*', r'ntuser\.dat', 'mntemp')
+                roaming(r'NvTelemetryContainer\.log.*', 'mntemp')
                 # General folders
                 roaming(
                     'NVIDIA', 'Amazon Cloud Drive', 'Code', 'CrashPlan', 'Jedi', r'Tencent\\TXSSO\\SSOTemp',
@@ -136,7 +148,7 @@ with RegexBuild('.*') as build:
         # C:\Users\Peter\AppData\Roaming\Mozilla\Firefox\Profiles\xxxxxxxx.Default\favicons.sqlite-wal
         # C:\Users\Peter\AppData\Roaming\Mozilla\Firefox\Profiles\xxxxxxxx.Default\startupCache\
         with paths(r'Firefox\\.*\\') as firefox:
-            firefox('favicons', 'webappstore', 'cookies', 'content-prefs', 'formhistory')(r'\.sqlite.*')
+            firefox('favicons', 'webappstore', 'cookies', 'content-prefs', 'formhistory')(r'\.sqlite.*$')
             firefox(
                 'storage', 'thumbnails', 'datareporting', 'cache2',
                 RegexBuild('startup', 'jumpList')('Cache'),
@@ -158,10 +170,12 @@ with RegexBuild('.*') as build:
 
         # Steam games
         with paths(r'steamapps\\common\\') as steam:
+            steam(r'.*\\steam_shader_cache\\')
+
             # Ignore official Skyrim packs
             # C:\Program Files (x86)\Steam\steamapps\common\Skyrim\Data\Skyrim - Meshes.bsa
             # C:\Program Files (x86)\Steam\steamapps\common\Skyrim\Data\Dragonborn.esm
-            with steam(r'Skyrim\\Data\\', exit=RegexBuild(r'\.')('bsa', 'esm')) as skyrim:
+            with steam(r'Skyrim\\Data\\', exit=RegexBuild(r'\.')('bsa', 'esm')('$')) as skyrim:
                 skyrim('Dawnguard', 'Dragonborn', 'HearthFires')
                 with skyrim('Skyrim') as skyrim_data:
                     skyrim_data('')
