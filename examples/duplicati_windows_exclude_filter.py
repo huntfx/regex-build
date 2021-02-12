@@ -1,44 +1,70 @@
 """Regex to use as a Duplicati filter.
 This may be added to in the future.
+
+Using a one liner like this provided a massive speed increase compared
+to using a lot of simple filters.
 """
 
 import os
+import subprocess
 import sys
+
 sys.path.append(os.path.normpath(__file__).rsplit(os.path.sep, 2)[0])
 from regex_build import RegexBuild
 
 
-with RegexBuild('.*') as build:
-    # Exensions
-    with build(r'\.', exit='$') as extensions:
-        extensions('(?i)', exit='(?-i)')(
-            'temp', 'tmp', 'cache', 'dmp', 'dump', 'err', 'crash', 'part',
-            RegexBuild('log')('', r'\..*'),
-            RegexBuild('lock')('', 'file'),
-        )
-        extensions('reapeaks', 'pyc', 'updaterId', 'cprestoretmp')
+test_filter = lambda filter, source='C:/': subprocess.Popen([
+    'C:/Program Files/Duplicati 2/Duplicati.CommandLine.exe',
+    'test-filter',
+    source,
+    '--exclude="[{}]"'.format(filter),
+], stdout=sys.stdout)
 
-    with build(r'\\') as paths:
+
+with RegexBuild() as main:
+    with main(r'C:\\') as c:
+        c('NVIDIA')(r'\\')
+        with c(r'Users\\.*\\') as userdir:
+            userdir(r'\.gitconfig')
+            userdir(
+                'OneDrive', 'searches', 'Favorites', 'Links', 'MicrosoftEdgeBackups', 'Cookies', 'Local Settings', 'Templates',
+                'Start Menu', 'My Documents', 'Application Data',  # Inaccessible system folders
+                'hpremote' # HP Remote Graphics Software logs
+                r'Autodesk\\Genuine Service',
+                #r'\.(?!vscode).+',  # Ignore all ".<name>" folders aside from Visual Studio Code
+                r'\..*',  # Ignore all ".<name>" folders
+                r'\.pyenv',  # Python installations
+            )(r'\\')
+
+    with main('.*') as build:
+        # Block Exensions
+        with build(r'\.', exit='$') as extensions:
+            extensions('(?i)')(
+                'temp', 'tmp', 'cache', 'dmp', 'dump', 'err', 'crash', 'part', 'localstorage',
+                'vhdx', # Virtual file system disks
+                'lock[A-Za-z9-0_-]*',
+                RegexBuild('log')('', r'\..*'), RegexBuild('lock')('', 'file'),
+            )('(?-i)')
+            extensions('reapeaks', 'pyc', 'updaterId', 'cprestoretmp')
+
         # Block specific files
-        paths(
+        build(
             'Thumbs.db', 'UsrClass.dat', 'output_log.txt',
             RegexBuild('hyberfil', 'swapfile')('.sys'),
             RegexBuild(r'LocalShaderCache-.*\.upk'),
         )('$')
 
-        paths('(?i)')(
+        build('(?i)')(
             # Block specific files that may be any case
             r'ntuser\.dat.*', 'autoexec.bat',
 
             # Block misc files that may not have extensions
             'temp', 'error', 'dump', 'dmp',
-            RegexBuild('log')('', r'\..*'),
-            RegexBuild('lock')('', 'file'),
-            RegexBuild('cache')('', r'\.json'),
+            RegexBuild('log')('', r'\..*'), RegexBuild('lock')('', 'file'), RegexBuild('cache')('', r'\.json'),
         )('(?-i)$')
 
         # Block specific folders
-        paths(
+        build(
             'Microsoft', 'NetHood', 'PrintHood', 'Recent', 'SendTo', 'LocalService', 'NetworkService', '__pycache__',
             'System Volume Information', 'RECYCLER', r'\$RECYCLE\.BIN', 'I386', 'MSOCache', 'Temporary Internet Files',
             r'Google\\Chrome\\Safe Browsing', r'\.duplicacy', r'\.git', 'System Volume Information',
@@ -50,23 +76,22 @@ with RegexBuild('.*') as build:
         )(r'\\')
 
         # Block misc folders
-        with paths('(?i)', exit=r'(?-i)\\') as directories:
-            directories(
-                'tmp', 'dmp', 'telemetry', 'local storage', '.backup', 'safebrowsing', 'installer',
-                RegexBuild('temp')('', 'orary', 'data'),
-                RegexBuild('', 'elevated')('diagnostics'), RegexBuild('hardware')('', ' ')('survey'),
-                RegexBuild('crash')('', 'es', RegexBuild('', ' ', r'\-')('report', 'log', 'dump')('', 's')),
-                RegexBuild(
-                    RegexBuild('web')('', 'app'), 'shader', 'gpu', 'd2ds','code', 'cef', 'package',
-                    'html', 'installer', 'data', 'file',
-                )('', ' ', r'\-')('cache'),  # Lots of cache folder types
-                RegexBuild('cache')('', 's', 'storage', RegexBuild('d')('', 'data', 'extensions', 'thumbnails')),
-                RegexBuild('dump', 'minidump', 'error')('', 's'),
-                RegexBuild('log')('', 's', 'files', 'backups'),
-            )
+        build('(?i)')(
+            'tmp', 'dmp', 'telemetry', 'local storage', r'\.backup', 'safebrowsing', 'installer',
+            RegexBuild('temp')('', 'orary', 'data'),
+            RegexBuild('', 'elevated')('diagnostics'), RegexBuild('hardware')('', ' ')('survey'),
+            RegexBuild('crash')('', 'es', RegexBuild('', ' ', r'\-')('report', 'log', 'dump')('', 's')),
+            RegexBuild(
+                RegexBuild('web')('', 'app'), 'shader', 'gpu', 'd2ds','code', 'cef', 'package',
+                'html', 'installer', 'data', 'file',
+            )('', ' ', r'\-')('cache'),  # Lots of cache folder types
+            RegexBuild('cache')('', 's', 'storage', RegexBuild('d')('', 'data', 'extensions', 'thumbnails')),
+            RegexBuild('dump', 'minidump', 'error')('', 's'),
+            RegexBuild('log')('', 's', 'files', 'backups'),
+        )(r'(?-i)\\')
 
         # Documents
-        with paths(r'Documents\\') as documents:
+        with build(r'Documents\\') as documents:
             # Adobe folder
             with documents(r'Adobe\\') as adobe:
                 with adobe(r'Adobe Media Encoder\\[0-9]*\.[0-9]*\\') as media_encoder:
@@ -81,31 +106,53 @@ with RegexBuild('.*') as build:
                 'ShooterGame', 'ShowdownVRDemo', 'SubstanceAtlantis', 'SciFiBunk', 'SillyGeo', 'VehicleGame',
             )(r'\\')
 
+            with documents(r'My Games\\') as games:
+                games(r'Titan Quest')('', ' - Immortal Throne')(r'\\SaveData\\Main\\_.*\\PlayerTmp0000\.chr')
+
+                with games(r'Path of Exile\\') as poe:
+                    poe(r'PoE-[0-9]*-[0-9]*-[0-9]*\.dmp')('', r'\.txt')('$')
+                    poe('Minimap', 'OnlineFilters')(r'\\')
+
             # General folders
             documents(
                 r'3DS Max [0-9]{4}\\SimCache',
                 RegexBuild('3DMark')('', 'Farandole')(r'\\Shaders'),
                 RegexBuild(r'Larian Studios\\Divinity Original Sin')('', ' Enhanced Edition')(r'\\LevelCache'),
             )(r'\\')
+
         # AppData
-        with paths(r'AppData\\') as appdata:
+        with build(r'AppData\\') as appdata:
             # Local
             with appdata(r'Local\\') as local:
                 # General files
                 local(
-                    'IconCache.db',
-                    r'Saber\\WWZ\\client\\render\\pso_cache'  # World War Z cache
+                    r'IconCache\.db', r'SageThumbs\.db3',
+                    r'LooksBuilder\\CurrentSession.ls3',
+                    r'Resmon\.ResmonCfg'  # Resource monitor config
+                    r'Saber\\WWZ\\client\\render\\pso_cache',  # World War Z cache
+                    r'ExpanDrive',  # ExpanDrive cache
+                    r'Arma 3\\[a-z]{4}3_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-2][0-9]-[0-6][0-9]-[0-6][0-9]\.rpt',  # \AppData\Local\Arma 3\arma3_2014-05-30_22-30-01.rpt
                 )('$')
                 # General folders
                 local(
-                    '\@nzxtcam-app-updater', 'Amazon Drive', 'ConnnectedDevicesPlatform', 'Downloaded Installations',
+                    '\@nzxtcam-app-updater', 'Amazon Drive', 'ConnectedDevicesPlatform', 'Downloaded Installations',
                     'Duplicati', 'GoToMeeting', 'Microsoft', r'MicrosoftEdge\\SharedCacheContainers', 'OneDrive',
-                    'Packages', 'SquirrelTemp', 'CrashRpt', 'Comms', 'GitHubDesktop', '4kdownload.com',
+                    'Packages', 'SquirrelTemp', 'CrashRpt', 'Comms', 'GitHub', 'GitHubDesktop', '4kdownload.com',
+                    'Apps', r'Dropbox\\Update', 'FluxSoftware', r'id Software\\quakelive', 'IsolatedStorage',
+                    'Last.fm', r'Mozilla\\updates', 'Native Instruments', 'Origin', 'PunkBuster', 'Razer',
+                    'assembly', r'Skype\\Apps', 'Spotify', 'TeamViewer', r'THQ\\Saints Row 2\\ads', 'Warframe',
+                    r'BBC\\BBC iPlayer Downloads', r'Battle\.net', 'GoodSync', 'Blizzard Entertainment', 'CEF',
+                    'VirtualStore',
+                    'History', 'Application Data',  # Inaccessible system folders
+                    'REDEngine',  # Cyberpunk cache
                     RegexBuild('Package')('s', ' Cache'), RegexBuild('NVIDIA')('', ' Corporation'),
+                    RegexBuild('Ubisoft')('', ' Game Launcher'),
                     RegexBuild(r'acquisition\\')('sensitive_data', 'tabcache'), 'EpicGamesLauncher',
                     RegexBuild(r'UnrealEngine\\.*\\')('DerivedDataCache', 'Intermediate'),
-                    RegexBuild(r'Google(?!\\Chrome)'),  # Exclude all Google directories aside from Chrome
                 )(r'\\')
+                # Exclude all Google/Mozilla directories aside from Chrome/Firefox
+                local(r'Google\\(?!Chrome\\).+'),
+                local(r'Mozilla\\(?!Firefox\\).+'),
 
             # Roaming
             with appdata(r'Roaming\\') as roaming:
@@ -113,7 +160,7 @@ with RegexBuild('.*') as build:
                 with roaming(r'Adobe\\') as adobe:
                     # C:\Users\Peter\AppData\Roaming\Adobe\Adobe Photoshop 2020\Adobe Photoshop 2020 Settings\web-cache-temp
                     adobe(
-                        'CRLogs', 'GUDE', 'Flash Player',
+                        'CRLogs', 'GUDE', 'Flash Player', 'OOBE', 'Common',
                         RegexBuild(r'Adobe Photoshop [0-9]{4}\\')(
                             RegexBuild('CT Font ', 'FontFeature')('Cache'),
                             RegexBuild(r'Adobe Photoshop [0-9]{4} Settings\\web-cache-temp'),
@@ -125,30 +172,45 @@ with RegexBuild('.*') as build:
                 roaming(r'NvTelemetryContainer\.log.*', 'mntemp')
                 # General folders
                 roaming(
-                    'NVIDIA', 'Amazon Cloud Drive', 'Code', 'CrashPlan', 'Jedi', r'Tencent\\TXSSO\\SSOTemp',
-                    'uTorrent', 'vstelemetry', 'Github Desktop', 'FAHClient', 'Discord', 'Visual Studio Setup',
-                    RegexBuild('NZXT')('', ' CAM'),
-                    RegexBuild(r'Adobe\\.*')('CT Font ', 'FontFeature', 'Asset', 'Native')(r'Cache'),
+                    'NVIDIA', 'Amazon Cloud Drive', 'Code', 'CrashPlan', r'Tencent\\TXSSO\\SSOTemp',
+                    'uTorrent', 'vstelemetry', 'GitHub Desktop', 'FAHClient', 'Visual Studio Setup',
+                    r'AirLiveDrive\\DisksCache', 'Guild Wars 2', 'Apple Computer', 'Autodesk', r'Battle\.net',
+                    'InstallShield Installation Information', r'\.mono', 'Zoom', 'vlc', 'EasyAntiCheat',
+                    r'Macromedia\\Flash Player',
+                    'Jedi',  # Python module
+                    RegexBuild('(?i)discord')('', 'sdk')('(?-i)'),
+                    RegexBuild('NZXT')('', ' CAM'), 'CAM',
                 )(r'\\')
 
+            # LocalLow
+            with appdata(r'LocalLow\\') as locallow:
+                locallow(
+                    'Apple Computer', 'Oracle', 'Mozilla', 'Sony Online Entertainment', 'Sun', 'Unity',
+                    r'Nolla_Games_Noita\\Save00\\world',  # Noita world
+                    r'.*\\Unity',  # Unity games have a folder at 2nd level
+                )(r'\\')
+
+                # Only back up Google Earth places
+                with build(r'Google\\', exit='.+') as google:
+                    google(r'(?!GoogleEarth\\)')
+                    with google(r'GoogleEarth\\') as earth:
+                        earth(r'(?!myplaces\.kml$)')
+
         # ProgramData
-        paths(r'ProgramData\\')(
+        build(r'ProgramData\\')(
             'Microsoft.*', 'NVIDIA.*', 'NV_Cache', 'CrashPlan', 'Battle.net', 'Auslogics', 'Autodesk', 'GFACE',
             'Blizzard Entertainment', 'boost_interprocess', 'Duplicati', 'Epic', 'FLEXnet', r'Mozilla\\Updates',
-            'Packages', 'Path of Building', 'Razer', r'Ubisoft\\Ubisoft Game Launcher', 'USO.*', 'Windows.*', '.mono',
+            'Packages', 'Path of Building', 'Razer', r'Ubisoft\\Ubisoft Game Launcher', 'USO.*', 'Windows.*', r'\.mono',
             r'Adobe\\SLStore', 'AVAST Software', 'CloudBerryLab', 'EA .*', 'For Honor.*', 'Intel', 'Kaspersky Lab',
             'LiquidTechnologies', 'Oracle', 'Origin', r'regid\.[0-9]{4}\-[0-9]{2}.com.*', 'RuPlatform', 'Samsung',
         )(r'\\')
-
-        # LocalLow
-        paths(r'LocalLow\\')('Mozilla', r'.*\\Unity', r'Nolla_Games_Noita\\Save00\\world\\')
 
         # Mozilla Firefox
         # C:\Users\Peter\AppData\Roaming\Mozilla\Firefox\Profiles\xxxxxxxx.Default\datareporting\
         # C:\Users\Peter\AppData\Roaming\Mozilla\Firefox\Profiles\xxxxxxxx.Default\favicons.sqlite-wal
         # C:\Users\Peter\AppData\Roaming\Mozilla\Firefox\Profiles\xxxxxxxx.Default\startupCache\
-        with paths(r'Firefox\\.*\\') as firefox:
-            firefox('favicons', 'webappstore', 'cookies', 'content-prefs', 'formhistory')(r'\.sqlite.*$')
+        with build(r'Firefox\\.*\\') as firefox:
+            firefox('favicons', 'webappstore', 'content-prefs', 'formhistory')(r'\.sqlite.*$')
             firefox(
                 'storage', 'thumbnails', 'datareporting', 'cache2',
                 RegexBuild('startup', 'jumpList')('Cache'),
@@ -158,7 +220,7 @@ with RegexBuild('.*') as build:
         # C:\Users\Peter\AppData\Local\Google\Chrome\User Data\Default\ChromeDWriteFontCache
         # C:\Users\Peter\AppData\Local\Google\Chrome\User Data\Default\blob_storage\
         # C:\Users\Peter\AppData\Local\Google\Chrome\User Data\Default\JumpListIconsMostVisited\
-        with paths(r'Chrome\\.*\\') as chrome:
+        with build(r'Chrome\\.*\\') as chrome:
             chrome('ChromeDWriteFontCache', 'Favicons.*', 'Google Profile.*', 'Cookies', 'Cookies-journal')
             chrome(
                 'AutofillStrikeDatabase', 'blob_storage', 'BudgetDatabase', 'Service Worker',
@@ -169,19 +231,35 @@ with RegexBuild('.*') as build:
             )(r'\\')
 
         # Steam games
-        with paths(r'steamapps\\common\\') as steam:
+        with build(r'steamapps\\common\\') as steam:
             steam(r'.*\\steam_shader_cache\\')
+
+            # Ignore official DS1 resources
+            with steam(r'Dungeon Siege 1\\Resources\\') as dsres:
+                dsres('Logic', 'Objects', 'Sound', 'Terrain', 'Voices')(r'\.dsres$')
 
             # Ignore official Skyrim packs
             # C:\Program Files (x86)\Steam\steamapps\common\Skyrim\Data\Skyrim - Meshes.bsa
             # C:\Program Files (x86)\Steam\steamapps\common\Skyrim\Data\Dragonborn.esm
-            with steam(r'Skyrim\\Data\\', exit=RegexBuild(r'\.')('bsa', 'esm')('$')) as skyrim:
-                skyrim('Dawnguard', 'Dragonborn', 'HearthFires')
-                with skyrim('Skyrim') as skyrim_data:
-                    skyrim_data('')
-                    with skyrim_data(' - ') as skyrim_packs:
-                        skyrim_packs('Animations', 'Interface', 'Meshes', 'Misc', 'Sounds', 'Textures', 'Shaders')
-                        skyrim_packs('Voices')('', 'Extra')
+            with steam(r'Skyrim\\') as skyrim:
+                skyrim('TESV.exe')
+                skyrim('DirectX10', 'DotNetFX', 'VCRedist')(r'\\')
+                with skyrim(r'Data\\', exit=RegexBuild(r'\.')('bsa', 'esm')('$')) as data:
+                    data('Dawnguard', 'Dragonborn', 'HearthFires')
+                    with data('Skyrim') as data_file:
+                        data_file('')
+                        with data_file(' - ') as data_type:
+                            data_type('Animations', 'Interface', 'Meshes', 'Misc', 'Sounds', 'Textures', 'Shaders')
+                            data_type('Voices')('', 'Extra')
+
+        # Only allow Plex database (\Plex Media Server\Plug-in Support\Databases\com.plexapp.plugins.library.db)
+        # This requires a bit of a hacky setup to force Duplicati to check inside the folders
+        with build(r'Plex Media Server\\', exit='.+') as plex:
+            plex(r'(?!Plug-in Support\\)')
+            with plex(r'Plug-in Support\\') as plugins:
+                plugins(r'(?!Databases\\)')
+                with plugins(r'Databases\\') as databases:
+                    databases(r'(?!com\.plexapp\.plugins\.library\.db$)')
 
 
 if __name__ == '__main__':
