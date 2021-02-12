@@ -15,13 +15,6 @@ with open(os.path.join(os.path.dirname(__file__), 'regex_build.py'), 'r') as f:
     else:
         raise RuntimeError('no version found')
 
-# Get the pip requirements
-try:
-    with open(os.path.join(os.path.dirname(__file__), 'requirements.txt'), 'r') as f:
-        requirements = [line.strip() for line in f]
-except OSError:
-    requirements = []
-
 setup(
     name = 'regex-build',
     packages = find_packages(),
@@ -41,7 +34,7 @@ setup(
         'Issues': 'https://github.com/huntfx/regex-build/issues',
     },
     keywords = ['regex', 'build', 'generate', 're', 'auto', 'create'],
-    install_requires=requirements,
+    install_requires=[],
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
