@@ -28,7 +28,7 @@ with RegexBuild() as main:
             userdir(r'\.gitconfig')
             userdir(
                 'OneDrive', 'searches', 'Favorites', 'Links', 'MicrosoftEdgeBackups', 'Cookies', 'Local Settings', 'Templates',
-                'Start Menu', 'My Documents', 'Application Data',  # Inaccessible system folders
+                'Start Menu', 'Application Data', RegexBuild('My ')('Documents', 'Videos', 'Pictures', 'Music'),   # Inaccessible system folders
                 'hpremote' # HP Remote Graphics Software logs
                 r'Autodesk\\Genuine Service',
                 #r'\.(?!vscode).+',  # Ignore all ".<name>" folders aside from Visual Studio Code
@@ -42,8 +42,7 @@ with RegexBuild() as main:
             extensions('(?i)')(
                 'temp', 'tmp', 'cache', 'dmp', 'dump', 'err', 'crash', 'part', 'localstorage',
                 'vhdx', # Virtual file system disks
-                'lock[A-Za-z9-0_-]*',
-                RegexBuild('log')('', r'\..*'), RegexBuild('lock')('', 'file'),
+                RegexBuild('log')('', r'\..*'), 'lock[a-zA-Z0-9_-]*',
             )('(?-i)')
             extensions('reapeaks', 'pyc', 'updaterId', 'cprestoretmp')
 
@@ -60,7 +59,7 @@ with RegexBuild() as main:
 
             # Block misc files that may not have extensions
             'temp', 'error', 'dump', 'dmp',
-            RegexBuild('log')('', r'\..*'), RegexBuild('lock')('', 'file'), RegexBuild('cache')('', r'\.json'),
+            RegexBuild('log')('', r'\..*'), RegexBuild('lock')('', 'file', '_.*'), RegexBuild('cache')('', r'\.json'),
         )('(?-i)$')
 
         # Block specific folders
@@ -130,21 +129,23 @@ with RegexBuild() as main:
                     r'LooksBuilder\\CurrentSession.ls3',
                     r'Resmon\.ResmonCfg'  # Resource monitor config
                     r'Saber\\WWZ\\client\\render\\pso_cache',  # World War Z cache
-                    r'ExpanDrive',  # ExpanDrive cache
+                    'ExpanDrive',  # ExpanDrive cache
                     r'Arma 3\\[a-z]{4}3_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-2][0-9]-[0-6][0-9]-[0-6][0-9]\.rpt',  # \AppData\Local\Arma 3\arma3_2014-05-30_22-30-01.rpt
                 )('$')
                 # General folders
                 local(
-                    '\@nzxtcam-app-updater', 'Amazon Drive', 'ConnectedDevicesPlatform', 'Downloaded Installations',
+                    '\@nzxtcam-app-updater', 'nzxt cam-updater', 'Amazon Drive', 'ConnectedDevicesPlatform',
                     'Duplicati', 'GoToMeeting', 'Microsoft', r'MicrosoftEdge\\SharedCacheContainers', 'OneDrive',
                     'Packages', 'SquirrelTemp', 'CrashRpt', 'Comms', 'GitHub', 'GitHubDesktop', '4kdownload.com',
                     'Apps', r'Dropbox\\Update', 'FluxSoftware', r'id Software\\quakelive', 'IsolatedStorage',
                     'Last.fm', r'Mozilla\\updates', 'Native Instruments', 'Origin', 'PunkBuster', 'Razer',
                     'assembly', r'Skype\\Apps', 'Spotify', 'TeamViewer', r'THQ\\Saints Row 2\\ads', 'Warframe',
                     r'BBC\\BBC iPlayer Downloads', r'Battle\.net', 'GoodSync', 'Blizzard Entertainment', 'CEF',
-                    'VirtualStore',
+                    'VirtualStore', 'chia-blockchain', 'Oculus', 'Everything', 'Mozilla', 'Discord',
+                    'bitwarden-updater', 'UnrealEngine', 'Downloaded Installations', 'Overwolf',
                     'History', 'Application Data',  # Inaccessible system folders
                     'REDEngine',  # Cyberpunk cache
+                    'Programs',  # Local installations
                     RegexBuild('Package')('s', ' Cache'), RegexBuild('NVIDIA')('', ' Corporation'),
                     RegexBuild('Ubisoft')('', ' Game Launcher'),
                     RegexBuild(r'acquisition\\')('sensitive_data', 'tabcache'), 'EpicGamesLauncher',
@@ -152,7 +153,6 @@ with RegexBuild() as main:
                 )(r'\\')
                 # Exclude all Google/Mozilla directories aside from Chrome/Firefox
                 local(r'Google\\(?!Chrome\\).+'),
-                local(r'Mozilla\\(?!Firefox\\).+'),
 
             # Roaming
             with appdata(r'Roaming\\') as roaming:
@@ -168,6 +168,10 @@ with RegexBuild() as main:
                     )(r'\\')
                     adobe(r'Color\\ACEConfigCache2.lst')
 
+                # Handbrake
+                with roaming('HandBrake') as handbrake:
+                    handbrake(r'hb_queue[0-9*]\.json')
+
                 # General files
                 roaming(r'NvTelemetryContainer\.log.*', 'mntemp')
                 # General folders
@@ -176,16 +180,29 @@ with RegexBuild() as main:
                     'uTorrent', 'vstelemetry', 'GitHub Desktop', 'FAHClient', 'Visual Studio Setup',
                     r'AirLiveDrive\\DisksCache', 'Guild Wars 2', 'Apple Computer', 'Autodesk', r'Battle\.net',
                     'InstallShield Installation Information', r'\.mono', 'Zoom', 'vlc', 'EasyAntiCheat',
-                    r'Macromedia\\Flash Player',
-                    'Jedi',  # Python module
+                    r'Macromedia\\Flash Player', 'Chia Blockchain', 'Oculus', 'Spotify', r'Teracopy\\History',
+                    'gcloud', 'Bitwarden', 'OculusClient', 'ente', 'Jedi',
                     RegexBuild('(?i)discord')('', 'sdk')('(?-i)'),
                     RegexBuild('NZXT')('', ' CAM'), 'CAM',
+                    r'Fatshark\\Darktide\\EBWebView',
                 )(r'\\')
+
+            # Mozilla Firefox
+            # C:\Users\Peter\AppData\Roaming\Mozilla\Firefox\Profiles\xxxxxxxx.Default\datareporting\
+            # C:\Users\Peter\AppData\Roaming\Mozilla\Firefox\Profiles\xxxxxxxx.Default\favicons.sqlite-wal
+            # C:\Users\Peter\AppData\Roaming\Mozilla\Firefox\Profiles\xxxxxxxx.Default\startupCache\
+            with build(r'Mozilla\\Firefox\\Profiles\\') as firefox_profiles:
+                with firefox_profiles(r'.*\\') as firefox_profile:
+                    firefox_profile(
+                        'crashes', 'shader-cache', 'datareporting', 'cache2',
+                        RegexBuild('startup', 'jumpList')('Cache'),
+                    )(r'\\')
 
             # LocalLow
             with appdata(r'LocalLow\\') as locallow:
                 locallow(
                     'Apple Computer', 'Oracle', 'Mozilla', 'Sony Online Entertainment', 'Sun', 'Unity',
+                    'Oculus',
                     r'Nolla_Games_Noita\\Save00\\world',  # Noita world
                     r'.*\\Unity',  # Unity games have a folder at 2nd level
                 )(r'\\')
@@ -204,17 +221,6 @@ with RegexBuild() as main:
             r'Adobe\\SLStore', 'AVAST Software', 'CloudBerryLab', 'EA .*', 'For Honor.*', 'Intel', 'Kaspersky Lab',
             'LiquidTechnologies', 'Oracle', 'Origin', r'regid\.[0-9]{4}\-[0-9]{2}.com.*', 'RuPlatform', 'Samsung',
         )(r'\\')
-
-        # Mozilla Firefox
-        # C:\Users\Peter\AppData\Roaming\Mozilla\Firefox\Profiles\xxxxxxxx.Default\datareporting\
-        # C:\Users\Peter\AppData\Roaming\Mozilla\Firefox\Profiles\xxxxxxxx.Default\favicons.sqlite-wal
-        # C:\Users\Peter\AppData\Roaming\Mozilla\Firefox\Profiles\xxxxxxxx.Default\startupCache\
-        with build(r'Firefox\\.*\\') as firefox:
-            firefox('favicons', 'webappstore', 'content-prefs', 'formhistory')(r'\.sqlite.*$')
-            firefox(
-                'storage', 'thumbnails', 'datareporting', 'cache2',
-                RegexBuild('startup', 'jumpList')('Cache'),
-            )(r'\\')
 
         # Google Chrome (it can be moved from AppData, so just check for "/Chrome/*")
         # C:\Users\Peter\AppData\Local\Google\Chrome\User Data\Default\ChromeDWriteFontCache
@@ -251,6 +257,14 @@ with RegexBuild() as main:
                         with data_file(' - ') as data_type:
                             data_type('Animations', 'Interface', 'Meshes', 'Misc', 'Sounds', 'Textures', 'Shaders')
                             data_type('Voices')('', 'Extra')
+
+            # Ignore all standard Beat Saber files
+            with steam(r'Beat Saber\\') as beat_saber:
+                with beat_saber(r'Beat Saber_Data\\') as beat_saber_data:
+                    beat_saber_data(r'[.\w-]+')('$')  # All files
+                    beat_saber_data('Managed', 'Plugins', 'Resources', 'StreamingAssets', 'UnitySubsystems')(r'\\')  # Specific folders
+                beat_saber('DLC', 'Libs')(r'\\')  # Specific folders
+                beat_saber(r'Unity.*\.')('dll', 'exe')  # Specific files
 
         # Only allow Plex database (\Plex Media Server\Plug-in Support\Databases\com.plexapp.plugins.library.db)
         # This requires a bit of a hacky setup to force Duplicati to check inside the folders
